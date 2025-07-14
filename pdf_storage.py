@@ -15,19 +15,6 @@ PDF_STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'pdf_
 # Garantir que o diretório existe
 os.makedirs(PDF_STORAGE_DIR, exist_ok=True)
 
-        # Criar registro na base de dados
-        pdf_file = PdfFile(
-            id=file_id,
-            original_filename=filename,
-            stored_filename=stored_filename,
-            file_path=file_path,
-            file_size=len(pdf_bytes),
-            file_hash=file_hash
-        )
-        
-        db.session.add(pdf_file)
-        db.session.commit()
-
 @pdf_storage_bp.route('/upload-pdf', methods=['POST'])
 def upload_pdf():
     """
@@ -201,4 +188,3 @@ def list_pdfs():
         return jsonify({
             'error': str(e)
         }), 500
-
