@@ -4,6 +4,8 @@ import uuid
 import base64
 from datetime import datetime, timedelta
 import hashlib
+from ..models.user import db
+from ..models.pdf_file import PdfFile
 
 pdf_storage_bp = Blueprint('pdf_storage', __name__)
 
@@ -13,8 +15,18 @@ PDF_STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'pdf_
 # Garantir que o diretório existe
 os.makedirs(PDF_STORAGE_DIR, exist_ok=True)
 
-# Dicionário para armazenar metadados dos PDFs (em produção, usar banco de dados)
-pdf_metadata = {}
+        # Criar registro na base de dados
+        pdf_file = PdfFile(
+            id=file_id,
+            original_filename=filename,
+            stored_filename=stored_filename,
+            file_path=file_path,
+            file_size=len(pdf_bytes),
+            file_hash=file_hash
+        )
+        
+        db.session.add(pdf_file)
+        db.session.commit()
 
 @pdf_storage_bp.route('/upload-pdf', methods=['POST'])
 def upload_pdf():
@@ -53,16 +65,18 @@ def upload_pdf():
         # Gerar hash para verificação de integridade
         file_hash = hashlib.md5(pdf_bytes).hexdigest()
         
-        # Armazenar metadados
-        pdf_metadata[file_id] = {
-            'original_filename': filename,
-            'stored_filename': stored_filename,
-            'file_path': file_path,
-            'upload_time': datetime.now().isoformat(),
-            'file_size': len(pdf_bytes),
-            'file_hash': file_hash,
-            'download_count': 0
-        }
+        # Criar registro na base de dados
+        pdf_file = PdfFile(
+            id=file_id,
+            original_filename=filename,
+            stored_filename=stored_filename,
+            file_path=file_path,
+            file_size=len(pdf_bytes),
+            file_hash=file_hash
+        )
+        
+        db.session.add(pdf_file)
+        db.session.commit()
         
         # Gerar URL de download
         download_url = url_for('pdf_storage.download_pdf', file_id=file_id, _external=True)
@@ -83,28 +97,23 @@ def download_pdf(file_id):
     """
     Permite download do PDF pelo ID
     """
-    try:
-        if file_id not in pdf_metadata:
-            return jsonify({'error': 'File not found'}), 404
+    try:        pdf_file = PdfFile.query.filter_by(id=file_id, is_active=True).first()
         
-        metadata = pdf_metadata[file_id]
-        file_path = metadata['file_path']
+        if not pdf_file:
+            return jsonify({"error": "File not found"}), 404
         
-        if not os.path.exists(file_path):
-            return jsonify({'error': 'File not found on disk'}), 404
+        if not os.path.exists(pdf_file.file_path):
+            return jsonify({"error": "File not found on disk"}), 404
         
         # Incrementar contador de downloads
-        metadata['download_count'] += 1
-        metadata['last_download'] = datetime.now().isoformat()
+        pdf_file.increment_download_count()
         
         # Retornar arquivo para download
         return send_file(
-            file_path,
+            pdf_file.file_path,
             as_attachment=True,
-            download_name=metadata['original_filename'],
-            mimetype='application/pdf'
-        )
-        
+            download_name=pdf_file.original_filename,
+            mimetype=\'application/pdf\'  
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -114,16 +123,18 @@ def get_pdf_info(file_id):
     Retorna informações sobre um PDF armazenado
     """
     try:
-        if file_id not in pdf_metadata:
-            return jsonify({'error': 'File not found'}), 404
+        pdf_file = PdfFile.query.filter_by(id=file_id, is_active=True).first()
         
-        metadata = pdf_metadata[file_id].copy()
+        if not pdf_file:
+            return jsonify({"error": "File not found"}), 404
+        
+        file_info = pdf_file.to_dict()
         # Remover informações sensíveis
-        metadata.pop('file_path', None)
+        file_info.pop("file_path", None)
         
         return jsonify({
-            'success': True,
-            'file_info': metadata
+            "success": True,
+            "file_info": file_info
         })
         
     except Exception as e:
@@ -136,25 +147,24 @@ def cleanup_old_files():
     """
     try:
         deleted_count = 0
-        cutoff_date = datetime.now() - timedelta(days=7)
+        cutoff_date = datetime.utcnow() - timedelta(days=7)
         
-        files_to_delete = []
-        for file_id, metadata in pdf_metadata.items():
-            upload_time = datetime.fromisoformat(metadata['upload_time'])
-            if upload_time < cutoff_date:
-                files_to_delete.append(file_id)
+        # Buscar arquivos antigos
+        old_files = PdfFile.query.filter(
+            PdfFile.upload_time < cutoff_date,
+            PdfFile.is_active == True
+        ).all()
         
-        for file_id in files_to_delete:
-            metadata = pdf_metadata[file_id]
-            file_path = metadata['file_path']
-            
+        for pdf_file in old_files:
             # Remover arquivo do disco
-            if os.path.exists(file_path):
-                os.remove(file_path)
+            if os.path.exists(pdf_file.file_path):
+                os.remove(pdf_file.file_path)
             
-            # Remover metadados
-            del pdf_metadata[file_id]
+            # Marcar como inativo na base de dados
+            pdf_file.is_active = False
             deleted_count += 1
+        
+        db.session.commit()
         
         return jsonify({
             'success': True,
@@ -170,14 +180,13 @@ def list_pdfs():
     Lista todos os PDFs armazenados (para debug/admin)
     """
     try:
-        files_info = []
-        for file_id, metadata in pdf_metadata.items():
-            info = metadata.copy()
-            info['file_id'] = file_id
-            info.pop('file_path', None)  # Remover caminho por segurança
-            files_info.append(info)
+        pdf_files = PdfFile.query.filter_by(is_active=True).all()
         
-        return jsonify({
+        files_info = []
+        for pdf_file in pdf_files:
+            info = pdf_file.to_dict()
+            info.pop(\'file_path\', None)  # Remover caminho por segurança
+            return jsonify({
             'success': True,
             'files': files_info,
             'total_files': len(files_info)
@@ -186,3 +195,9 @@ def list_pdfs():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+
+    except Exception as e:
+        return jsonify({
+            'error': str(e)
+        }), 500
