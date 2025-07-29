@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Tickets - Freshdesk</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .refresh-btn {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+
+        .refresh-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ccc;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.loading {
+            background: #ff9800;
+        }
+
+        .status-dot.success {
+            background: #4CAF50;
+        }
+
+        .status-dot.error {
+            background: #f44336;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 1rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .chart-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #333;
+        }
+
+        .tickets-section {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .section-header {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .company-group {
+            border-bottom: 1px solid #eee;
+        }
+
+        .company-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .tickets-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .ticket-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: background-color 0.2s ease;
+        }
+
+        .ticket-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .ticket-id {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .ticket-subject {
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .ticket-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-open { background: #e3f2fd; color: #1976d2; }
+        .status-pending { background: #fff3e0; color: #f57c00; }
+        .status-resolved { background: #e8f5e8; color: #388e3c; }
+        .status-closed { background: #fce4ec; color: #c2185b; }
+
+        .priority-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .priority-low { background: #e8f5e8; color: #388e3c; }
+        .priority-medium { background: #fff3e0; color: #f57c00; }
+        .priority-high { background: #ffebee; color: #d32f2f; }
+        .priority-urgent { background: #fce4ec; color: #ad1457; }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #f44336;
+            background: #ffebee;
+            margin: 20px;
+            border-radius: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Dashboard de Tickets Freshdesk</h1>
+            <p>Visualização em tempo real dos tickets por empresa e tipo</p>
+        </div>
+
+        <div class="controls">
+            <button id="refreshBtn" class="refresh-btn">
+                🔄 Atualizar Tickets
+            </button>
+            <div class="status-indicator">
+                <div id="statusDot" class="status-dot"></div>
+                <span id="statusText">Aguardando...</span>
+            </div>
+            <div id="lastUpdate"></div>
+        </div>
+
+        <div id="statsGrid" class="stats-grid">
+            <!-- Stats cards will be populated here -->
+        </div>
+
+        <div id="chartsGrid" class="charts-grid">
+            <!-- Charts will be populated here -->
+        </div>
+
+        <div id="ticketsSection" class="tickets-section">
+            <div class="section-header">
+                📋 Lista de Tickets por Empresa
+            </div>
+            <div id="ticketsList">
+                <div class="loading">Clique em "Atualizar Tickets" para carregar os dados</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ticketsData = [];
+        let charts = {};
+
+        // Status management
+        function updateStatus(status, text) {
+            const dot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            dot.className = `status-dot ${status}`;
+            statusText.textContent = text;
+        }
+
+        // Update last update time
+        function updateLastUpdateTime() {
+            const lastUpdate = document.getElementById('lastUpdate');
+            lastUpdate.textContent = `Última atualização: ${new Date().toLocaleString('pt-BR')}`;
+        }
+
+        // Fetch tickets data
+        async function fetchTickets() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = '⏳ Carregando...';
+            
+            updateStatus('loading', 'Executando script PowerShell...');
+
+            try {
+                const response = await fetch('/api/tickets');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                ticketsData = data;
+                
+                updateStatus('success', 'Dados carregados com sucesso');
+                updateLastUpdateTime();
+                
+                renderStats();
+                renderCharts();
+                renderTicketsList();
+                
+            } catch (error) {
+                console.error('Erro ao buscar tickets:', error);
+                updateStatus('error', `Erro: ${error.message}`);
+                
+                document.getElementById('ticketsList').innerHTML = 
+                    `<div class="error">❌ Erro ao carregar tickets: ${error.message}</div>`;
+            } finally {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = '🔄 Atualizar Tickets';
+            }
+        }
+
+        // Render statistics cards
+        function renderStats() {
+            const statsGrid = document.getElementById('statsGrid');
+            
+            const totalTickets = ticketsData.length;
+            const openTickets = ticketsData.filter(t => t.status === 2).length; // Open
+            const resolvedTickets = ticketsData.filter(t => t.status === 4).length; // Resolved
+            const companies = [...new Set(ticketsData.map(t => cf_empresa || 'Sem Empresa'))].length;
+
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${totalTickets}</div>
+                    <div class="stat-label">Total de Tickets</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${openTickets}</div>
+                    <div class="stat-label">Tickets Abertos</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${resolvedTickets}</div>
+                    <div class="stat-label">Tickets Resolvidos</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${companies}</div>
+                    <div class="stat-label">Empresas</div>
+                </div>
+            `;
+        }
+
+        // Render charts
+        function renderCharts() {
+            const chartsGrid = document.getElementById('chartsGrid');
+            
+            chartsGrid.innerHTML = `
+                <div class="chart-container">
+                    <div class="chart-title">Tickets por Status</div>
+                    <canvas id="statusChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Tickets por Prioridade</div>
+                    <canvas id="priorityChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Tickets por Empresa (Top 10)</div>
+                    <canvas id="companyChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <div class="chart-title">Tickets por Tipo</div>
+                    <canvas id="typeChart"></canvas>
+                </div>
+            `;
+
+            // Destroy existing charts
+            Object.values(charts).forEach(chart => chart.destroy());
+            charts = {};
+
+            // Status chart
+            const statusData = getStatusData();
+            charts.status = new Chart(document.getElementById('statusChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: statusData.labels,
+                    datasets: [{
+                        data: statusData.values,
+                        backgroundColor: ['#2196F3', '#FF9800', '#4CAF50', '#E91E63']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // Priority chart
+            const priorityData = getPriorityData();
+            charts.priority = new Chart(document.getElementById('priorityChart'), {
+                type: 'bar',
+                data: {
+                    labels: priorityData.labels,
+                    datasets: [{
+                        data: priorityData.values,
+                        backgroundColor: ['#4CAF50', '#FF9800', '#F44336', '#9C27B0']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Company chart
+            const companyData = getCompanyData();
+            charts.company = new Chart(document.getElementById('companyChart'), {
+                type: 'horizontalBar',
+                data: {
+                    labels: companyData.labels,
+                    datasets: [{
+                        data: companyData.values,
+                        backgroundColor: '#667eea'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Type chart
+            const typeData = getTypeData();
+            charts.type = new Chart(document.getElementById('typeChart'), {
+                type: 'pie',
+                data: {
+                    labels: typeData.labels,
+                    datasets: [{
+                        data: typeData.values,
+                        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Get status data for chart
+        function getStatusData() {
+            const statusMap = {
+                2: 'Aberto',
+                3: 'Pendente',
+                4: 'Resolvido',
+                5: 'Fechado'
+            };
+            
+            const statusCounts = {};
+            ticketsData.forEach(ticket => {
+                const status = statusMap[ticket.status] || 'Desconhecido';
+                statusCounts[status] = (statusCounts[status] || 0) + 1;
+            });
+
+            return {
+                labels: Object.keys(statusCounts),
+                values: Object.values(statusCounts)
+            };
+        }
+
+        // Get priority data for chart
+        function getPriorityData() {
+            const priorityMap = {
+                1: 'Baixa',
+                2: 'Média',
+                3: 'Alta',
+                4: 'Urgente'
+            };
+            
+            const priorityCounts = {};
+            ticketsData.forEach(ticket => {
+                const priority = priorityMap[ticket.priority] || 'Desconhecida';
+                priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
+            });
+
+            return {
+                labels: Object.keys(priorityCounts),
+                values: Object.values(priorityCounts)
+            };
+        }
+
+        // Get company data for chart
+        function getCompanyData() {
+            const companyCounts = {};
+            ticketsData.forEach(ticket => {
+                const company = ticket.cf_empresa || 'Sem Empresa';
+                companyCounts[company] = (companyCounts[company] || 0) + 1;
+            });
+
+            // Get top 10 companies
+            const sorted = Object.entries(companyCounts)
+                .sort(([,a], [,b]) => b - a)
+                .slice(0, 10);
+
+            return {
+                labels: sorted.map(([company]) => company),
+                values: sorted.map(([,count]) => count)
+            };
+        }
+
+        // Get type data for chart
+        function getTypeData() {
+            const typeCounts = {};
+            ticketsData.forEach(ticket => {
+                const type = ticket.type || 'Sem Tipo';
+                typeCounts[type] = (typeCounts[type] || 0) + 1;
+            });
+
+            return {
+                labels: Object.keys(typeCounts),
+                values: Object.values(typeCounts)
+            };
+        }
+
+        // Render tickets list
+        function renderTicketsList() {
+            const ticketsList = document.getElementById('ticketsList');
+            
+            // Agrupa tickets por empresa usando o nome, se disponível
+            const ticketsByCompany = {};
+            ticketsData.forEach(ticket => {
+                const company = ticket.company_name || ticket.cf_empresa || 'Sem Empresa';
+                if (!ticketsByCompany[company]) {
+                    ticketsByCompany[company] = [];
+                }
+                ticketsByCompany[company].push(ticket);
+            });
+
+            let html = '';
+            Object.entries(ticketsByCompany).forEach(([company, tickets]) => {
+                html += `
+                    <div class="company-group">
+                        <div class="company-header">
+                            🏢 ${company} (${tickets.length} tickets)
+                        </div>
+                        <div class="tickets-list">
+                `;
+                
+                tickets.forEach(ticket => {
+                    const statusMap = {
+                        2: { text: 'Aberto', class: 'status-open' },
+                        3: { text: 'Pendente', class: 'status-pending' },
+                        4: { text: 'Resolvido', class: 'status-resolved' },
+                        5: { text: 'Fechado', class: 'status-closed' }
+                    };
+                    
+                    const priorityMap = {
+                        1: { text: 'Baixa', class: 'priority-low' },
+                        2: { text: 'Média', class: 'priority-medium' },
+                        3: { text: 'Alta', class: 'priority-high' },
+                        4: { text: 'Urgente', class: 'priority-urgent' }
+                    };
+                    
+                    const status = statusMap[ticket.status] || { text: 'Desconhecido', class: 'status-open' };
+                    const priority = priorityMap[ticket.priority] || { text: 'Desconhecida', class: 'priority-low' };
+                    const createdDate = new Date(ticket.created_at).toLocaleString('pt-BR');
+                    
+                    html += `
+                        <div class="ticket-item">
+                            <div class="ticket-id">#${ticket.id}</div>
+                            <div class="ticket-subject">${ticket.subject || 'Sem assunto'}</div>
+                            <div class="ticket-meta">
+                                <span class="status-badge ${status.class}">${status.text}</span>
+                                <span class="priority-badge ${priority.class}">${priority.text}</span>
+                                <span>📅 ${createdDate}</span>
+                                <span>🏷️ ${ticket.type || 'Sem tipo'}</span>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+            
+            ticketsList.innerHTML = html;
+        }
+
+        // Event listeners
+        document.getElementById('refreshBtn').addEventListener('click', fetchTickets);
+
+        // Auto-refresh every 5 minutes
+        setInterval(fetchTickets, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
+
