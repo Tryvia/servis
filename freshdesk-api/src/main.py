@@ -9,7 +9,7 @@ from src.models.user import db
 from src.models.client import Client
 from src.routes.user import user_bp
 from src.routes.tickets import tickets_bp
-from src.routes.tickets_by_client import tickets_by_client_bp
+from src.routes.tickets_by_client_python import tickets_by_client_bp
 from src.routes.clients import clients_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
